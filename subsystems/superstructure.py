@@ -8,8 +8,8 @@ from wpimath.geometry import Pose3d
 
 from constants import Constants
 from subsystems.intake import IntakeSubsystem
-from subsystems.swerve import SwerveSubsystem
-from subsystems.vision import VisionSubsystem
+from subsystems.drive import Drive
+from subsystems.vision import Vision
 from subsystems.climber import ClimberSubsystem
 
 
@@ -26,21 +26,21 @@ class Superstructure(Subsystem):
     # Map each goal to each subsystem state to reduce code complexity
     _goal_to_states: dict[Goal,
             tuple[
-                Optional[VisionSubsystem.SubsystemState]
+                Optional[Vision.SubsystemState]
             ]] = {
-        Goal.DEFAULT: (IntakeSubsystem.SubsystemState.STOP, VisionSubsystem.SubsystemState.ALL_ESTIMATES),
-        Goal.CLIMBING: (IntakeSubsystem.SubsystemState.STOP, VisionSubsystem.SubsystemState.ALL_ESTIMATES),
+        Goal.DEFAULT: (IntakeSubsystem.SubsystemState.STOP, Vision.SubsystemState.ALL_ESTIMATES),
+        Goal.CLIMBING: (IntakeSubsystem.SubsystemState.STOP, Vision.SubsystemState.ALL_ESTIMATES),
        
     }
 
-    def __init__(self, drivetrain: SwerveSubsystem, vision: VisionSubsystem, climber: ClimberSubsystem, intake: IntakeSubsystem) -> None:
+    def __init__(self, drivetrain: Drive, vision: Vision, climber: ClimberSubsystem, intake: IntakeSubsystem) -> None:
         """
         Constructs the superstructure using instance of each subsystem.
 
         :param drivetrain: Swerve drive base
-        :type drivetrain: SwerveSubsystem
+        :type drivetrain: Drive
         :param vision: Handles all vision estimates
-        :type vision: VisionSubsystem
+        :type vision: Vision
         :param climber: Subsystem that handles the climber
         :type climber: ClimberSubsystem
         :param intake: Subsystem that handles the intake
