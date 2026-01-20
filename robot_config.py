@@ -32,10 +32,11 @@ def detect_robot() -> Robot:
     # Method 1: Check MAC address (RoboRIO MAC addresses are unique)
     try:
         mac_address = RobotController.getMACAddress()
+        print(f"MAC address: {mac_address}")
         # Replace these with your actual MAC addresses
         # You can find MAC addresses via: ssh admin@roborio-XXXX-frc.local "cat /sys/class/net/eth0/address"
         LARRY_MAC_ADDRESSES = [
-            "00:80:2f:XX:XX:XX",  # Replace with Larry's actual MAC
+            "00:80:2f:33:9f:1d",  # Replace with Larry's actual MAC
             # Add other possible MAC addresses for Larry if it has multiple interfaces
         ]
         COMP_MAC_ADDRESSES = [
@@ -70,7 +71,7 @@ def detect_robot() -> Robot:
     
     # Fallback: Default to COMP for competition, or set to LARRY for testing
     # Change this default based on your preference
-    return Robot.COMP  # or Robot.LARRY if you want to default to test robot
+    return Robot.LARRY  # or Robot.LARRY if you want to default to test robot
 
 
 # Detect robot at module load time
@@ -102,7 +103,7 @@ def has_subsystem(subsystem_name: str) -> bool:
         # Add other Comp subsystems as needed
     }
     
-    if currentRobot == Robot.LARRY:
-        return subsystem_name.lower() in LARRY_SUBSYSTEMS
-    else:  # COMP or UNKNOWN defaults to COMP
+    if currentRobot == Robot.COMP:
         return subsystem_name.lower() in COMP_SUBSYSTEMS
+    else:  # LARRY or UNKNOWN defaults to LARRY
+        return subsystem_name.lower() in LARRY_SUBSYSTEMS
