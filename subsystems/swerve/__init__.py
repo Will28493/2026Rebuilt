@@ -13,7 +13,7 @@ from pathplannerlib.controller import PPHolonomicDriveController
 from pathplannerlib.util import DriveFeedforwards
 from pathplannerlib.util.swerve import SwerveSetpoint, SwerveSetpointGenerator
 from phoenix6 import SignalLogger, swerve, units, utils
-from phoenix6.swerve.requests import ApplyRobotSpeeds
+from phoenix6.swerve.requests import ApplyRobotSpeeds, FieldCentric, RobotCentric
 from pykit.logger import Logger
 from wpilib import DriverStation, Notifier, RobotController
 from wpilib.sysid import SysIdRoutineLog
@@ -266,16 +266,19 @@ class SwerveSubsystem(Subsystem, swerve.SwerveDrivetrain):
         )
 
         # State logging
-        state = self.get_state
-        self._pose = lambda: state().pose
-        self._speeds = lambda: state().speeds
-        self._module_states = lambda: state().module_states
-        self._module_targets = lambda: state().module_targets
-        Logger.recordOutput("Drive/GeneratorActive", False)
+        state = self.get_state()
+        self._cached_pose = state.pose
+        self._cached_speeds = state.speeds
+        self._cached_module_states = state.module_states
+        self._cached_module_targets = state.module_targets
+        self._generator_active = False
+        Logger.recordOutput("Drive/GeneratorActive", self._generator_active)
 
+        # Setpoint generator
+        self._generator_master_switch = True
         self._previous_setpoint = SwerveSetpoint(
-            self._speeds(),
-            self._module_states(),
+            self._cached_speeds,
+            self._cached_module_states,
             DriveFeedforwards.zeros(4)
         )
         self._setpoint_generator = SwerveSetpointGenerator(config, rotationsToRadians(3.75))
@@ -298,25 +301,20 @@ class SwerveSubsystem(Subsystem, swerve.SwerveDrivetrain):
         Otherwise, the request is used for something else (hockey stop, PointAtX, etc).
         Simply update prevSetpoint and call the request as normal.
         """
-        # FieldCentric, RobotCentric
-        if (
-            hasattr(req, "velocity_x")
-            and hasattr(req, "velocity_y")
-            and hasattr(req, "rotational_rate")
-        ):
+        if isinstance(req, (RobotCentric, FieldCentric)) and self._generator_master_switch:
             target_speeds = ChassisSpeeds(
                 req.velocity_x,
                 req.velocity_y,
                 req.rotational_rate,
             )
 
-            # FieldCentric
-            if "field" in type(req).__name__.lower():
+            # Convert field speeds to robot relative
+            if isinstance(req, FieldCentric):
                 target_speeds = ChassisSpeeds.fromFieldRelativeSpeeds(
                     req.velocity_x,
                     req.velocity_y,
                     req.rotational_rate,
-                    self._pose().rotation() + self.get_operator_forward_direction(),
+                    self._cached_pose.rotation() + self.get_operator_forward_direction(),
                 )
 
 
@@ -326,8 +324,7 @@ class SwerveSubsystem(Subsystem, swerve.SwerveDrivetrain):
                 0.02,
             )
 
-            Logger.recordOutput("Drive/GeneratorActive", True)
-
+            self._generator_active = True
             self.set_control(
                 self._apply_robot_speeds
                 .with_speeds(self._previous_setpoint.robot_relative_speeds)
@@ -339,16 +336,14 @@ class SwerveSubsystem(Subsystem, swerve.SwerveDrivetrain):
                 )
             )
 
-        # ApplyRobotSpeeds
-        elif hasattr(req, "speeds"):
+        elif isinstance(req, ApplyRobotSpeeds) and self._generator_master_switch:
             self._previous_setpoint = self._setpoint_generator.generateSetpoint(
                 self._previous_setpoint,
                 req.speeds,
                 0.02,
             )
 
-            Logger.recordOutput("Drive/GeneratorActive", True)
-
+            self._generator_active = True
             self.set_control(
                 self._apply_robot_speeds
                 .with_speeds(self._previous_setpoint.robot_relative_speeds)
@@ -357,12 +352,12 @@ class SwerveSubsystem(Subsystem, swerve.SwerveDrivetrain):
         # Everything else
         else:
             self._previous_setpoint = SwerveSetpoint(
-                self._speeds(),
-                self._module_states(),
+                self._cached_speeds,
+                self._cached_module_states,
                 DriveFeedforwards.zeros(4),
             )
 
-            Logger.recordOutput("Drive/GeneratorActive", False)
+            self._generator_active = False
             self.set_control(req)
 
     def apply_request(
@@ -424,18 +419,23 @@ class SwerveSubsystem(Subsystem, swerve.SwerveDrivetrain):
                 )
                 self._has_applied_operator_perspective = True
 
+        # Update caches
+        state = self.get_state()
+        self._cached_pose = state.pose
+        self._cached_speeds = state.speeds
+        self._cached_module_states = state.module_states
+        self._cached_module_targets = state.module_targets
         Logger.recordOutput("Drive/OdometryFrequency", self.get_odometry_frequency())
-        Logger.recordOutput("Drive/Speeds", self._speeds())
-        Logger.recordOutput("Drive/ModuleStates", self._module_states())
-        Logger.recordOutput("Drive/ModuleTargets", self._module_targets())
+        Logger.recordOutput("Drive/Speeds", self._cached_speeds)
+        Logger.recordOutput("Drive/ModuleStates", self._cached_module_states)
+        Logger.recordOutput("Drive/ModuleTargets", self._cached_module_targets)
 
-        pose = self._pose()
-        Logger.recordOutput("Drive/EstimatedPosition2d", pose)
+        Logger.recordOutput("Drive/EstimatedPosition2d", self._cached_pose)
 
         # Calculate 3D pose based off gyro's reported rotation
         rotation = self.get_rotation3d()
         Logger.recordOutput(
-            "Drive/EstimatedPosition3d", Pose3d(pose).exp(
+            "Drive/EstimatedPosition3d", Pose3d(self._cached_pose).exp(
                 Twist3d(
                     0,
                     0,
@@ -455,6 +455,8 @@ class SwerveSubsystem(Subsystem, swerve.SwerveDrivetrain):
                 )
             )
         )
+
+        Logger.recordOutput("Drive/GeneratorActive", self._generator_active)
 
     def _start_sim_thread(self):
         def _sim_periodic():
