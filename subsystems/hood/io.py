@@ -4,26 +4,26 @@ from typing import Final
 
 from phoenix6 import BaseStatusSignal
 from phoenix6.configs import TalonFXConfiguration
-from phoenix6.controls import VelocityVoltage
+from phoenix6.controls import VoltageOut
 from phoenix6.hardware import TalonFX
 from phoenix6.signals import NeutralModeValue
 from pykit.autolog import autolog
-from wpimath.units import radians, radians_per_second, volts, amperes, celsius, degrees, revolutions_per_minute
+from wpimath.units import radians, radians_per_second, volts, amperes, celsius, degrees
 
 from constants import Constants
 from util import tryUntilOk
 
 
-class LauncherIO(ABC):
+class HoodIO(ABC):
     """
-    Abstract base class for Launcher IO implementations.
+    Abstract base class for hood IO implementations.
     Provides the interface for both real hardware and simulation.
     """
 
     @autolog
     @dataclass
-    class LauncherIOInputs:
-        """Inputs from the Launcher hardware/simulation."""
+    class HoodIOInputs:
+        """Inputs from the hood hardware/simulation."""
         # Motor status
         motorConnected: bool = False
         motorPosition: radians = 0.0
@@ -33,16 +33,16 @@ class LauncherIO(ABC):
         motorTemperature: celsius = 0.0
 
 
-    def updateInputs(self, inputs: LauncherIOInputs) -> None:
+    def updateInputs(self, inputs: HoodIOInputs) -> None:
         """Update the inputs with current hardware/simulation state."""
         pass
 
-    def setMotorRPS(self, rps: float) -> None:
-        """Set the motor output velocity."""
+    def setMotorVoltage(self, voltage: volts) -> None:
+        """Set the motor output voltage."""
         pass
 
 
-class LauncherIOTalonFX(LauncherIO):
+class HoodIOTalonFX(HoodIO):
     """
     Real hardware implementation using TalonFX motor controller.
     """
@@ -78,9 +78,9 @@ class LauncherIOTalonFX(LauncherIO):
         self._motor.optimize_bus_utilization()
 
         # Voltage control request
-        self._voltageRequest: Final[VelocityVoltage] = VelocityVoltage(0)
+        self._voltageRequest: Final[VoltageOut] = VoltageOut(0)
 
-    def updateInputs(self, inputs: LauncherIO.LauncherIOInputs) -> None:
+    def updateInputs(self, inputs: HoodIO.HoodIOInputs) -> None:
         """Update inputs with current motor state."""
         # Refresh all motor signals
         motorStatus = BaseStatusSignal.refresh_all(
@@ -99,14 +99,14 @@ class LauncherIOTalonFX(LauncherIO):
         inputs.motorCurrent = self._current.value_as_double
         inputs.motorTemperature = self._temperature.value_as_double
 
-    def setMotorRPS(self, rps: float) -> None:
-        """Set the motor output velocity."""
-        self._voltageRequest.velocity = rps
+    def setMotorVoltage(self, voltage: volts) -> None:
+        """Set the motor output voltage."""
+        self._voltageRequest.output = voltage
         self._motor.set_control(self._voltageRequest)
 
 
 
-class LauncherIOSim(LauncherIO):
+class HoodIOSim(HoodIO):
     """
     Simulation implementation for testing without hardware.
     """
@@ -117,7 +117,7 @@ class LauncherIOSim(LauncherIO):
         self._motorVelocity: float = 0.0
         self._motorAppliedVolts: float = 0.0
 
-    def updateInputs(self, inputs: LauncherIO.LauncherIOInputs) -> None:
+    def updateInputs(self, inputs: HoodIO.HoodIOInputs) -> None:
         """Update inputs with simulated state."""
         # Simulate motor behavior (simple integration)
         # In a real simulation, you'd use a physics model here
@@ -133,9 +133,9 @@ class LauncherIOSim(LauncherIO):
         inputs.motorTemperature = 25.0  # Room temperature
 
 
-    def setMotorRPS(self, rps: float) -> None:
-        """Set the motor output velocity."""
-        self._motorAppliedVolts = max(-12.0, min(12.0, rps))
+    def setMotorVoltage(self, voltage: volts) -> None:
+        """Set the motor output voltage (simulated)."""
+        self._motorAppliedVolts = max(-12.0, min(12.0, voltage))
         # Simple velocity model: voltage -> velocity (with some damping)
         self._motorVelocity = self._motorAppliedVolts * 10.0  # Adjust multiplier as needed
 

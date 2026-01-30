@@ -1,32 +1,28 @@
-import os.path
-from typing import Final
-
 import wpilib
-from commands2 import CommandScheduler, Command, TimedCommandRobot
+from commands2 import CommandScheduler
+from cscore import CameraServer
+from ntcore import NetworkTableInstance
 from phoenix6 import SignalLogger
 from pykit.loggedrobot import LoggedRobot
 from pykit.logger import Logger
 from pykit.logreplaysource import LogReplaySource
 from pykit.networktables.nt4Publisher import NT4Publisher
 from pykit.wpilog.wpilogwriter import WPILOGWriter
-from wpilib import DataLogManager, DriverStation, RobotBase
-from wpinet import WebServer
+from wpilib import DataLogManager, DriverStation, Timer
 
+import robot_config
 from constants import Constants
 from lib import elasticlib
 from lib.elasticlib import Notification, NotificationLevel
 from robot_container import RobotContainer
-from util import LoggedTracer
 
 
-class Robot(TimedCommandRobot):
+class Oasis(LoggedRobot):
 
-    def __init__(self) -> None:
+    def __init__(self, period = 0.02) -> None:
         super().__init__()
 
-        Logger.recordMetadata("TuningMode", str(Constants.tuningMode).lower())
-        Logger.recordMetadata("RuntimeType", RobotBase.getRuntimeType().name)
-        Logger.recordMetadata("RobotMode", Constants.currentMode.name)
+        Logger.recordMetadata("Robot", robot_config.currentRobot.name.title())
 
         match Constants.currentMode:
             # Running on a real robot, log to a USB stick ("/U/logs")
@@ -68,47 +64,34 @@ class Robot(TimedCommandRobot):
         # Start PyKit logger
         Logger.start()
 
-        # Disable joystick connection is we aren't connected to a real field (or simulating)
-        DriverStation.silenceJoystickConnectionWarning(not DriverStation.isFMSAttached() or RobotBase.isSimulation())
+        DriverStation.silenceJoystickConnectionWarning(not DriverStation.isFMSAttached())
+        self.container = RobotContainer()
 
-        # CTRE status signal logging (only enabled if USB drive is attached)
         SignalLogger.enable_auto_logging(False)
-        SignalLogger.start() if SignalLogger.set_path("/media/sda1/ctre-logs/").is_ok() else SignalLogger.stop()
+        wpilib.LiveWindow.disableAllTelemetry()
 
-        # Setup web server for downloading Elastic layouts
-        # (https://frc-elastic.gitbook.io/docs/additional-features-and-references/remote-layout-downloading)
-        WebServer.getInstance().start(5800, self.get_deploy_directory())
+        CameraServer.startAutomaticCapture()
+        CameraServer.startAutomaticCapture()
 
-        self.container: Final[RobotContainer] = RobotContainer()
-        self._currentAuto: Command | None = None
+        #WebServer.getInstance().start(5800, self.get_deploy_directory())
+        # port_forwarder = PortForwarder.getInstance()
+        # for i in range(10): # Forward limelight ports for use when tethered at events.
+        #     port_forwarder.add(5800 + i, f"{Constants.VisionConstants.FRONT_CENTER}.local", 5800 + i)
+        #     port_forwarder.add(5800 + i + 10, f"{Constants.VisionConstants.BACK_CENTER}.local", 5800 + i)
 
-    @staticmethod
-    def get_deploy_directory():
-        if os.path.exists("/home/lvuser"):
-            return "/home/lvuser/py/deploy"
-        else:
-            return os.path.join(os.getcwd(), "deploy")
+        DataLogManager.log("Robot initialized")
+
+        dashboard_nt = NetworkTableInstance.getDefault().getTable("Elastic")
+        self._match_time_pub = dashboard_nt.getFloatTopic("Match Time").publish()
 
     def robotPeriodic(self) -> None:
-        LoggedTracer.reset()
         CommandScheduler.getInstance().run()
+        self._match_time_pub.set(Timer.getMatchTime())
 
-    def disabledInit(self):
-        DataLogManager.log("Robot disabled")
-
-    def disabledPeriodic(self) -> None:
-        # Workaround: Check to see if the autoChooser has a new auto, then set the robot pose
-        if self._currentAuto != self.container.get_autonomous_command():
-            self.container.readyRobotForMatch()
-            self._currentAuto = self.container.get_autonomous_command()
-            print(f"Robot pose set for auto \"{self._currentAuto.getName()}\"")
-
-    def disabledExit(self):
-        DataLogManager.log("Exiting disabled mode...")
+    def _simulationPeriodic(self) -> None:
+        pass
 
     def autonomousInit(self) -> None:
-        DataLogManager.log("Autonomous period started")
-
         selected_auto = self.container.get_autonomous_command()
         if selected_auto is not None:
             DataLogManager.log(f"Selected Auto: {selected_auto.getName()}")
@@ -125,9 +108,7 @@ class Robot(TimedCommandRobot):
             
     def teleopInit(self) -> None:
         DataLogManager.log("Teleoperated period started")
-
-    def teleopPeriodic(self) -> None:
-        pass
+        self.container.get_autonomous_command().cancel()
 
     def teleopExit(self) -> None:
         DataLogManager.log("Teleoperated period ended")
@@ -146,14 +127,20 @@ class Robot(TimedCommandRobot):
         elasticlib.select_tab("Debug")
         SignalLogger.start()
 
-    def testPeriodic(self) -> None:
-        pass
+    def disabledInit(self):
+        self.container.vision.set_throttle(150)
+
+    def disabledExit(self):
+        self.container.vision.set_throttle(0)
 
     def testExit(self):
-        DataLogManager.log("Test period ended")
-
-    def _simulationInit(self):
+        pass
+    
+    def disabledPeriodic(self) -> None:
         pass
 
-    def _simulationPeriodic(self) -> None:
+    def teleopPeriodic(self) -> None:
+        pass
+
+    def testPeriodic(self) -> None:
         pass
