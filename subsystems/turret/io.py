@@ -9,21 +9,22 @@ from phoenix6.hardware import TalonFX
 from phoenix6.signals import NeutralModeValue
 from pykit.autolog import autolog
 from wpimath.units import radians, radians_per_second, volts, amperes, celsius, degrees
+from wpilib.simulation import DCMotorSim
 
 from constants import Constants
 from util import tryUntilOk
 
 
-class AimingIO(ABC):
+class TurretIO(ABC):
     """
-    Abstract base class for Aiming IO implementations.
+    Abstract base class for Turret IO implementations.
     Provides the interface for both real hardware and simulation.
     """
 
     @autolog
     @dataclass
-    class AimingIOInputs:
-        """Inputs from the Aiming hardware/simulation."""
+    class TurretIOInputs:
+        """Inputs from the Turret hardware/simulation."""
         # Motor status
         motorConnected: bool = False
         motorPosition: radians = 0.0
@@ -33,7 +34,7 @@ class AimingIO(ABC):
         motorTemperature: celsius = 0.0
 
 
-    def updateInputs(self, inputs: AimingIOInputs) -> None:
+    def updateInputs(self, inputs: TurretIOInputs) -> None:
         """Update the inputs with current hardware/simulation state."""
         pass
 
@@ -42,7 +43,7 @@ class AimingIO(ABC):
         pass
 
 
-class AimingIOTalonFX(AimingIO):
+class TurretIOTalonFX(TurretIO):
     """
     Real hardware implementation using TalonFX motor controller.
     """
@@ -65,6 +66,7 @@ class AimingIOTalonFX(AimingIO):
         self._appliedVolts: Final = self._motor.get_motor_voltage()
         self._current: Final = self._motor.get_stator_current()
         self._temperature: Final = self._motor.get_device_temp()
+        
 
         # Configure update frequencies
         BaseStatusSignal.set_update_frequency_for_all(
@@ -80,7 +82,7 @@ class AimingIOTalonFX(AimingIO):
         # Voltage control request
         self._voltageRequest: Final[VoltageOut] = VoltageOut(0)
 
-    def updateInputs(self, inputs: AimingIO.AimingIOInputs) -> None:
+    def updateInputs(self, inputs: TurretIO.TurretIOInputs) -> None:
         """Update inputs with current motor state."""
         # Refresh all motor signals
         motorStatus = BaseStatusSignal.refresh_all(
@@ -106,7 +108,7 @@ class AimingIOTalonFX(AimingIO):
 
 
 
-class AimingIOSim(AimingIO):
+class TurretIOSim(TurretIO):
     """
     Simulation implementation for testing without hardware.
     """
@@ -116,8 +118,16 @@ class AimingIOSim(AimingIO):
         self._motorPosition: float = 0.0
         self._motorVelocity: float = 0.0
         self._motorAppliedVolts: float = 0.0
+        self.motor_sim = DCMotorSim(self._motor, Constants.TurretConstants.GEAR_RATIO, 0.455) # MOI is a placeholder
 
-    def updateInputs(self, inputs: AimingIO.AimingIOInputs) -> None:
+    def simulationPeriodic(self):
+        # Sim is not done
+        self.motor_sim.setInputVoltage()
+        DCMotorSim.setInputVoltage()
+        DCMotorSim.update()
+
+
+    def updateInputs(self, inputs: TurretIO.TurretIOInputs) -> None:
         """Update inputs with simulated state."""
         # Simulate motor behavior (simple integration)
         # In a real simulation, you'd use a physics model here
@@ -139,3 +149,4 @@ class AimingIOSim(AimingIO):
         # Simple velocity model: voltage -> velocity (with some damping)
         self._motorVelocity = self._motorAppliedVolts * 10.0  # Adjust multiplier as needed
 
+    

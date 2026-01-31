@@ -3,7 +3,7 @@ from enum import auto, Enum
 from commands2 import Command, cmd, PIDSubsystem
 from phoenix6 import utils
 from phoenix6.configs import CANrangeConfiguration, TalonFXConfiguration, MotorOutputConfigs, FeedbackConfigs, HardwareLimitSwitchConfigs, ProximityParamsConfigs, CurrentLimitsConfigs
-from phoenix6.controls import DutyCycleOut
+from phoenix6.controls import PositionVoltage
 from phoenix6.hardware import TalonFX, CANrange
 from phoenix6.signals import NeutralModeValue, ForwardLimitValue, ForwardLimitSourceValue
 
@@ -13,7 +13,7 @@ from wpilib import Alert
 from typing import Final
 from constants import Constants
 from subsystems import StateSubsystem
-from subsystems.turret.io import AimingIO
+from subsystems.turret.io import TurretIO
 from math import *
 from wpimath.geometry import Pose2d
 from wpilib import DriverStation
@@ -37,21 +37,24 @@ class TurretSubsytem(PIDSubsystem):
     # On the reference there's something about a CANrange here and I don't know what that means so I'm leaving it.
 
     _motor_config = (TalonFXConfiguration()
-                     .with_slot0(Constants.AimingConstants.GAINS)
+                     .with_slot0(Constants.TurretConstants.GAINS)
                      .with_motor_output(MotorOutputConfigs().with_neutral_mode(NeutralModeValue.BRAKE))
-                     .with_feedback(FeedbackConfigs().with_sensor_to_mechanism_ratio(Constants.AimingConstants.GEAR_RATIO))
-                     .with_current_limits(CurrentLimitsConfigs().with_supply_current_limit_enable(True).with_supply_current_limit(Constants.AimingConstants.SUPPLY_CURRENT))
+                     .with_feedback(FeedbackConfigs().with_sensor_to_mechanism_ratio(Constants.TurretConstants.GEAR_RATIO))
+                     .with_current_limits(CurrentLimitsConfigs().with_supply_current_limit_enable(True).with_supply_current_limit(Constants.TurretConstants.SUPPLY_CURRENT))
                      )
     
-    def __init__(self, io: AimingIO):
-        super.__init__() # Change PID controller and Initial position if needed
+    def __init__(self, io: TurretIO, robot_pose_supplier: callable[[], Pose2d]):
+        super.__init__("Turret") # Change PID controller and Initial position if needed
 
-        self._io: Final[AimingIO] = io
-        self._inputs = AimingIO.AimingIOInputs()
+        self._turret_motor = TalonFX(Constants.CanIDs.TURRET_TALON)
+
+        self._io: Final[TurretIO] = io
+        self._inputs = TurretIO.TurretIOInputs()
+        self.robot_pose_supplier = robot_pose_supplier()
 
         self._motorDisconnectedAlert = Alert("Turret motor is disconnected.", Alert.AlertType.kError)
 
-        self.velocityRequest = DutyCycleOut(0)
+        self.positionRequest = PositionVoltage(0)
 
         self.independentAngle = 0
         self.goal = ""
@@ -67,7 +70,9 @@ class TurretSubsytem(PIDSubsystem):
         # Update alerts
         self._motorDisconnectedAlert.set(not self._inputs.motorConnected)
 
-        self.currentAngle = RobotState.get_current_pose().rotation + self.independentAngle
+        self.currentAngle = self.robot_pose_supplier.rotation() + self.independentAngle
+
+
 
         if self.goal:
             self.rotateTowardsGoal(self.goal)
@@ -94,14 +99,14 @@ class TurretSubsytem(PIDSubsystem):
         # If the robot is in the neutral zone, have it determine what side of the zone it's on so it knows the target to aim at
         match self.goal.lower():
             case "hub":
-                xdist = abs(RobotState.get_current_pose().X - Constants.GoalLocations.BLUEHUB.X) if DriverStation.getAlliance == DriverStation.Alliance.kBlue else abs(RobotState.get_current_pose().X - Constants.GoalLocations.REDHUB.X)
-                ydist = abs(RobotState.get_current_pose().Y - Constants.GoalLocations.BLUEHUB.Y) if DriverStation.getAlliance == DriverStation.Alliance.kBlue else abs(RobotState.get_current_pose().Y - Constants.GoalLocations.REDHUB.Y)
+                xdist = abs(self.robot_pose_supplier.X() - Constants.GoalLocations.BLUEHUB.X) if DriverStation.getAlliance == DriverStation.Alliance.kBlue else abs(self.robot_pose_supplier.X() - Constants.GoalLocations.REDHUB.X)
+                ydist = abs(self.robot_pose_supplier.Y() - Constants.GoalLocations.BLUEHUB.Y) if DriverStation.getAlliance == DriverStation.Alliance.kBlue else abs(self.robot_pose_supplier.Y() - Constants.GoalLocations.REDHUB.Y)
             case "outpost":
-                xdist = abs(RobotState.get_current_pose().X - Constants.GoalLocations.BLUEOUTPOSTPASS.X) if DriverStation.getAlliance == DriverStation.Alliance.kBlue else abs(RobotState.get_current_pose().X - Constants.GoalLocations.REDOUTPOSTPASS.X)
-                ydist = abs(RobotState.get_current_pose().Y - Constants.GoalLocations.BLUEOUTPOSTPASS.Y) if DriverStation.getAlliance == DriverStation.Alliance.kBlue else abs(RobotState.get_current_pose().Y - Constants.GoalLocations.REDOUTPOSTPASS.Y)
+                xdist = abs(self.robot_pose_supplier.X() - Constants.GoalLocations.BLUEOUTPOSTPASS.X) if DriverStation.getAlliance == DriverStation.Alliance.kBlue else abs(self.robot_pose_supplier.X() - Constants.GoalLocations.REDOUTPOSTPASS.X)
+                ydist = abs(self.robot_pose_supplier.Y() - Constants.GoalLocations.BLUEOUTPOSTPASS.Y) if DriverStation.getAlliance == DriverStation.Alliance.kBlue else abs(self.robot_pose_supplier.Y() - Constants.GoalLocations.REDOUTPOSTPASS.Y)
             case "depot":
-                xdist = abs(RobotState.get_current_pose().X - Constants.GoalLocations.BLUEDEPOTPASS.X) if DriverStation.getAlliance == DriverStation.Alliance.kBlue else abs(RobotState.get_current_pose().X - Constants.GoalLocations.REDDEPOTPASS.X)
-                ydist = abs(RobotState.get_current_pose().Y - Constants.GoalLocations.BLUEDEPOTPASS.Y) if DriverStation.getAlliance == DriverStation.Alliance.kBlue else abs(RobotState.get_current_pose().Y - Constants.GoalLocations.REDDEPOTPASS.Y)
+                xdist = abs(self.robot_pose_supplier.X() - Constants.GoalLocations.BLUEDEPOTPASS.X) if DriverStation.getAlliance == DriverStation.Alliance.kBlue else abs(self.robot_pose_supplier.X() - Constants.GoalLocations.REDDEPOTPASS.X)
+                ydist = abs(self.robot_pose_supplier.Y() - Constants.GoalLocations.BLUEDEPOTPASS.Y) if DriverStation.getAlliance == DriverStation.Alliance.kBlue else abs(self.robot_pose_supplier.Y() - Constants.GoalLocations.REDDEPOTPASS.Y)
             case "_":
                 raise TypeError("Turret aiming target must be \"hub\", \"outpost\", or \"depot\"")
         target_angle = atan(ydist / xdist)
@@ -110,11 +115,8 @@ class TurretSubsytem(PIDSubsystem):
     def rotateTowardsGoal(self):
         # This function might not work because it probably isn't periodic so it'll only set the output once and then not check if the angle is correct until it's called again (which is when the target changes)
         targetAngle = self.getAngleToGoal()
-
-        if not (self.currentAngle >= targetAngle - Constants.TurretConstants.ANGLEDEADBAND and self.currentAngle <= targetAngle + Constants.TurretConstants.ANGLEDEADBAND):
-            self.velocityRequest.output = -1 if self.currentAngle > targetAngle else 1
-        else:
-            self.velocityRequest.output = 0
+        self.positionRequest.position = targetAngle / Constants.TurretConstants.RADTOROTRATIO
+        self._turret_motor.set_control(self.positionRequest)
 
 """
 WORK LEFT TO DO

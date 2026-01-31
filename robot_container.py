@@ -25,6 +25,7 @@ from subsystems.intake import IntakeSubsystem
 from subsystems.superstructure import Superstructure
 from subsystems.swerve import SwerveSubsystem
 from subsystems.vision import VisionSubsystem
+from subsystems.turret import TurretSubsystem, TurretIO
 
 
 class RobotContainer:
@@ -45,6 +46,7 @@ class RobotContainer:
         self.intake: Optional[IntakeSubsystem] = None
         self.drivetrain: Optional[SwerveSubsystem] = None
         self.vision: Optional[VisionSubsystem] = None
+        self.turret: Optional[TurretSubsystem] = None
         match Constants.currentMode:
             case Constants.Mode.REAL:
                 # Real robot, instantiate hardware IO implementations
@@ -93,6 +95,7 @@ class RobotContainer:
                     Constants.VisionConstants.FRONT,
                     Constants.VisionConstants.LAUNCHER,
                 )
+                self.turret = TurretSubsystem(TurretIO.TurretIOSim(), lambda: self.drivetrain.get_state().pose)
 
                 # Create climber only if it exists on this robot
                 if has_subsystem("climber"):

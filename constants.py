@@ -1,5 +1,6 @@
 from enum import Enum, auto
 from typing import Final
+from math import *
 
 from phoenix6.configs.config_groups import Slot0Configs
 from robotpy_apriltag import AprilTagFieldLayout, AprilTagField
@@ -75,7 +76,11 @@ class Constants:
         LAUNCHER = "limelight-al"
 
     class TurretConstants:
-        ANGLEDEADBAND = 2
+        GAINS = None
+        GEAR_RATIO = None
+        SUPPLY_CURRENT = None
+        ANGLEDEADBAND = 0.0349066
+        RADTOROTRATIO = 2 * pi
 
     class GoalLocations:
         BLUEHUB = Pose2d(4.625594, 4.034536)
