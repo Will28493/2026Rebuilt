@@ -41,7 +41,7 @@ class RobotContainer:
         self._driver_controller = commands2.button.CommandXboxController(0)
         self._function_controller = commands2.button.CommandXboxController(1)
 
-        
+
         # Initialize subsystems as None - will be created conditionally
         self.climber: Optional[ClimberSubsystem] = None
         self.intake: Optional[IntakeSubsystem] = None
@@ -72,7 +72,7 @@ class RobotContainer:
                         .with_motor_output(MotorOutputConfigs().with_neutral_mode(NeutralModeValue.BRAKE))
                         .with_feedback(FeedbackConfigs().with_sensor_to_mechanism_ratio(Constants.ClimberConstants.GEAR_RATIO))
                     )
-                    
+
                     # Create climber real hardware IO
                     # Note: Constants.CanIDs.CLIMB_TALON is automatically set based on detected robot (Larry vs Comp)
                     climber_io = ClimberIOTalonFX(
@@ -80,7 +80,7 @@ class RobotContainer:
                         Constants.ClimberConstants.SERVO_PORT,
                         climber_motor_config
                     )
-                    
+
                     # Create climber subsystem with real hardware IO
                     self.climber = ClimberSubsystem(climber_io)
                     print("Climber, Present")
@@ -117,7 +117,7 @@ class RobotContainer:
                 #hood
                 self.robot_pose_supplier = lambda: self.drivetrain.get_state().pose
                 self.hood = HoodSubsystem(HoodIOSim(), self.robot_pose_supplier)
-           
+
 
                 # Create climber only if it exists on this robot
                 if has_subsystem("climber"):
@@ -181,7 +181,7 @@ class RobotContainer:
             .with_drive_request_type(swerve.SwerveModule.DriveRequestType.VELOCITY)
             .with_steer_request_type(swerve.SwerveModule.SteerRequestType.POSITION)
         )
-        
+
         self._brake = swerve.requests.SwerveDriveBrake()
         self._point = swerve.requests.PointWheelsAt()
 
@@ -236,9 +236,9 @@ class RobotContainer:
         )
 
         if self.hood is not None: #simple binds for testing
-            self._function_controller.povLeft().whileTrue(self.hood.run(lambda: self.hood.io.setPosition(-0.1)))
-            self._function_controller.povRight().whileTrue(self.hood.run(lambda: self.hood.io.setPosition(0.1)))
-            self._driver_controller.povDown().whileTrue(self.hood.run(lambda:  self.hood.io.setPosition(self.hood.calculate_angle()/360)))
+            self._function_controller.povLeft().whileTrue(self.hood.run(lambda: self.hood.io.set_position(Rotation2d.fromDegrees(-10))))
+            self._function_controller.povRight().whileTrue(self.hood.run(lambda: self.hood.io.set_position(Rotation2d.fromDegrees(10))))
+            self._driver_controller.povDown().whileTrue(self.hood.run(lambda:  self.hood.io.set_position(self.hood.calculate_angle() / 360)))
         else:
             print("bet you wish you had an adjustible hood. too bad you dont.")
 
@@ -323,19 +323,19 @@ class RobotContainer:
 
     def get_autonomous_command(self) -> commands2.Command:
         return self._auto_chooser.getSelected()
-    
+
     def get_climber(self) -> Optional[ClimberSubsystem]:
         """Get the climber subsystem if it exists on this robot."""
         return self.climber
-    
+
     def get_intake(self) -> Optional[IntakeSubsystem]:
         """Get the intake subsystem if it exists on this robot."""
         return self.intake
-    
+
     def has_climber(self) -> bool:
         """Check if climber subsystem exists on this robot."""
         return self.climber is not None
-    
+
     def has_intake(self) -> bool:
         """Check if intake subsystem exists on this robot."""
         return self.intake is not None

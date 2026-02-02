@@ -4,6 +4,7 @@ from typing import Final
 from phoenix6.configs.config_groups import Slot0Configs
 from robotpy_apriltag import AprilTagFieldLayout, AprilTagField
 from wpilib import RobotBase
+from wpimath.geometry import Pose2d
 
 from robot_config import currentRobot, Robot
 
@@ -39,7 +40,7 @@ class Constants:
         LAUNCHER_RIGHT_TALON = 16 # Kraken X44
         TURRET_CANCODER = 17
         HOOD_CANCODER = 18
-    
+
     class ClimberConstants:
         GEAR_RATIO = None
         GAINS = None
@@ -61,6 +62,7 @@ class Constants:
         GAINS = None
         SUPPLY_CURRENT = None
         INSIDE_FRAME_ANGLE = None
+
 
     class FeederConstants:
         GEAR_RATIO = None
@@ -84,7 +86,9 @@ class Constants:
 )
     SUPPLY_CURRENT = 35
 
-
+    class FieldConstants:
+        HUB_POSE = Pose2d(4.625594, 4.034536, 0.0)  # blue hub, flip when needed
+        HUB_HEIGHT = 1.3860018  # hub height - initial height of shooter (17.433 inches) (in meters)
 
 # Initialize robot-specific hardware configurations
 def _init_hardware_configs():
@@ -126,7 +130,7 @@ def _init_hardware_configs():
             Constants.ClimberConstants.VOLTAGE_INWARDS = 16.0
             Constants.ClimberConstants.VOLTAGE_OUTWARDS = -4.0
             Constants.ClimberConstants.CLIMB_FULL_THRESHOLD = 100.0  # Adjust as needed
-    
+
             # Intake
             Constants.IntakeConstants.GEAR_RATIO = 1.0  # Adjust based on actual gear ratio
             Constants.IntakeConstants.GAINS = (Slot0Configs()

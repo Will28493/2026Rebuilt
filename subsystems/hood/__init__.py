@@ -1,44 +1,65 @@
+"""
+Hood subsystem
+"""
+from math import atan, sqrt
 from typing import Callable
+
+from pathplannerlib.auto import FlippingUtil
+from pykit.logger import Logger
+from wpilib import Alert, DriverStation
+from wpimath.filter import Debouncer
+from wpimath.geometry import Pose2d, Rotation2d, Pose3d
+
+from constants import Constants
 from subsystems import Subsystem
 from subsystems.hood.io import HoodIO
-from wpilib import Alert
-from wpimath.geometry import Pose2d, Rotation2d
-from pathplannerlib.auto import AutoBuilder, FlippingUtil
-from math import atan, sqrt
 
-from pykit.logger import Logger
-from wpimath.filter import Debouncer
-
+# pylint: disable=too-many-instance-attributes
 class HoodSubsystem(Subsystem):
+    """subsystem for hood"""
+
     def __init__(self, io: HoodIO, robot_pose_supplier: Callable[[], Pose2d]):
         super().__init__()
 
         self.io = io
+        self.alliance = DriverStation.getAlliance()
 
-        self.robot_pose_supplier = robot_pose_supplier()
+        self.robot_pose_supplier = robot_pose_supplier
 
         self.inputs = HoodIO.HoodIOInputs()
-        self._motorDisconnectedAlert = Alert("Hood motor is disconnected.", Alert.AlertType.kError)
+        self.hood_disconnected_alert = Alert("Hood motor is disconnected.", Alert.AlertType.kError)
 
-        self.atSetPointDebounce = Debouncer(0.1, Debouncer.DebounceType.kRising)
+        self.at_set_point_debounce = Debouncer(0.1, Debouncer.DebounceType.kRising)
 
-        self.hub_pose = Pose2d(4.625594, 4.034536, 0.0)
-        self.distance = self.robot_pose_supplier.translation().distance(self.hub_pose.translation())
-        self.launch_speed =  7.62 # meters per second
-        self.height = 1.3860018 # hub height - initial height of shooter (17.433 inches) (in meters)
+        self.hub_pose = Pose2d # blue hub
+        self.launch_speed =  10.03 # meters per second
+        self.distance = 1
+        self.angle = atan(       # calculated angle using launch speed, distance and starting height
+            (self.launch_speed ** 2 +
+             sqrt(
+                 self.launch_speed ** 4 -
+                 9.80665 *
+                 (9.80665 * self.distance ** 2 +
+                  3 * Constants.FieldConstants.HUB_HEIGHT * self.launch_speed ** 2)))
+             / (9.80665 * self.distance))
 
-    def calculate_angle(self):
-        self.angle = atan(self.launch_speed**2+sqrt(self.launch_speed**4 - 9.80665*(9.80665*self.distance**2+2*self.height*self.launch_speed**2)/9.80665*self.distance))
-        return self.angle
 
     def periodic(self):
-        self.io.updateInputs(self.inputs)
-        """this below may not work because it passes in a float instead of a rotation, will get that fixed soon."""
-        self.io.setPosition(self.calculate_angle()/360) # convert degrees to rotations,
-    
+        """runs stuff periodically (every 20 ms)"""
+        self.io.update_inputs(self.inputs)
         Logger.processInputs("Hood", self.inputs)
 
-        self._motorDisconnectedAlert.set(not self.inputs.motorConnected)
+        self.hub_pose = Constants.FieldConstants.HUB_POSE
+        self.distance = (self.robot_pose_supplier()
+                         .translation().distance(self.hub_pose.translation()))
 
-        if AutoBuilder.shouldFlip():
+        self.io.set_position(Rotation2d.fromDegrees(self.angle)) # convert degrees to rotations,
+
+        self.hood_disconnected_alert.set(not self.inputs.hood_connected)
+
+        if self.alliance != DriverStation.getAlliance():
             self.hub_pose = FlippingUtil.flipFieldPose(self.hub_pose)
+            self.alliance = DriverStation.getAlliance()
+
+    def get_component_pose(self) -> Pose3d:
+        """for advantage scope modelling (placeholder)"""
