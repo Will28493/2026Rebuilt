@@ -85,18 +85,17 @@ class Constants:
                 .with_k_a(0.0)
             )
         GEAR_RATIO = 170/36
-        SUPPLY_CURRENT = 30
-        ANGLEDEADBAND = 0.0349066
-        RADTOROTRATIO = 2 * pi
+        SUPPLY_CURRENT = 40
+        MOI = .455
 
     class GoalLocations:
-        BLUEHUB = Pose2d(4.625594, 4.034536, 0)
-        BLUEDEPOTPASS = Pose2d(4.020286, 0, 0)
-        BLUEOUTPOSTPASS = Pose2d(4.020286, 8.069072, 0)
+        BLUE_HUB = Pose2d(4.625594, 4.034536, 0)
+        BLUE_DEPOT_PASS = Pose2d(4.020286, 0, 0)
+        BLUE_OUTPOST_PASS = Pose2d(4.020286, 8.069072, 0)
 
-        REDHUB = Pose2d(11.915394, 4.034536, 180)
-        REDDEPOTPASS = Pose2d(12.517591, 8.069072, 180)
-        REDOUTPOSTPASS = Pose2d(12.517591, 0, 180)
+        RED_HUB = Pose2d(11.915394, 4.034536, 180)
+        RED_DEPOT_PASS = Pose2d(12.517591, 8.069072, 180)
+        RED_OUTPOST_PASS = Pose2d(12.517591, 0, 180)
 
 
 

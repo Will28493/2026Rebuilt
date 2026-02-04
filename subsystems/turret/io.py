@@ -1,20 +1,18 @@
 from abc import ABC
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Final
 
 from phoenix6 import BaseStatusSignal
-from phoenix6.configs import TalonFXConfiguration, MotorOutputConfigs, FeedbackConfigs, HardwareLimitSwitchConfigs, ProximityParamsConfigs, CurrentLimitsConfigs
-from phoenix6.controls import VoltageOut, PositionVoltage
+from phoenix6.configs import TalonFXConfiguration
+from phoenix6.controls import PositionVoltage
 from phoenix6.hardware import TalonFX
 from phoenix6.signals import NeutralModeValue, InvertedValue
 from pykit.autolog import autolog
-from wpimath.units import radians, radians_per_second, volts, amperes, celsius, degrees, rotationsToRadians
-from wpilib.simulation import DCMotorSim, EncoderSim
+from wpimath.units import radians, radians_per_second, volts, amperes, celsius, rotationsToRadians
+from wpilib.simulation import DCMotorSim
 from wpimath.system.plant import DCMotor, LinearSystemId
 from wpimath.geometry import Rotation2d
-from wpilib import Encoder, PWMTalonFX, RobotController
 from wpimath.controller import PIDController
-from wpimath.trajectory import TrapezoidProfile
 
 from constants import Constants
 from util import tryUntilOk
@@ -53,6 +51,12 @@ class TurretIOTalonFX(TurretIO):
     
     def __init__(self, motor_id: int) -> None:
         self.turret_motor: Final[TalonFX] = TalonFX(motor_id, "rio")
+
+        self.controller = PIDController(
+            Constants.TurretConstants.GAINS.k_p,
+            Constants.TurretConstants.GAINS.k_i,
+            Constants.TurretConstants.GAINS.k_d,
+            ) 
 
         motor_config = TalonFXConfiguration()
         motor_config.slot0 = Constants.TurretConstants.GAINS
@@ -103,6 +107,7 @@ class TurretIOTalonFX(TurretIO):
 
     def set_position(self, rotation: Rotation2d) -> None:
         """Set the position."""
+        self.position_request = rotation
         self.turret_motor.set_control(self.position_request)
 
 
@@ -115,12 +120,12 @@ class TurretIOSim(TurretIO):
     def __init__(self) -> None:
         """Initialize the simulation IO."""
         self.motor = DCMotor.krakenX60(1)
-        self.turretSim = DCMotorSim(LinearSystemId.DCMotorSystem(self.motor, .455, Constants.TurretConstants.GEAR_RATIO), self.motor) # MOI is a placeholder
+        self.turretSim = DCMotorSim(LinearSystemId.DCMotorSystem(self.motor, Constants.TurretConstants.MOI, Constants.TurretConstants.GEAR_RATIO), self.motor)
         self.closed_loop = False
 
         self._motorPosition: float = 0.0
         self._motorVelocity: float = 0.0
-        self.AppliedVolts: float = 0.0
+        self.appliedVolts: float = 0.0
 
         self.controller = PIDController(
             Constants.TurretConstants.GAINS.k_p,
@@ -130,16 +135,14 @@ class TurretIOSim(TurretIO):
 
     def updateInputs(self, inputs: TurretIO.TurretIOInputs) -> None:
         """Update inputs with simulated state."""
-        # Simulate motor behavior (simple integration)
-        # In a real simulation, you'd use a physics model here
         dt = 0.02  # 20ms periodic
 
         if self.closed_loop:
-            self.AppliedVolts = self.controller.calculate(self.turretSim.getAngularPosition())
+            self.appliedVolts = self.controller.calculate(self.turretSim.getAngularPosition())
         else:
             self.controller.reset()
 
-        self.setMotorVoltage(self.AppliedVolts)
+        self.setMotorVoltage(self.appliedVolts)
         self.turretSim.update(dt)
 
         inputs.motorConnected = True
@@ -152,27 +155,11 @@ class TurretIOSim(TurretIO):
 
     def setOpenLoop(self, output):
         self.closed_loop = False
-        self.AppliedVolts = output
+        self.appliedVolts = output
 
     def setPosition(self, position):
         self.closed_loop = True
-        self.controller.getSetpoint(rotationsToRadians(position))
-
-
-        """
-        # Update inputs
-        inputs.motorConnected = True
-        inputs.motorPosition = self._motorPosition
-        inputs.motorVelocity = self._motorVelocity
-        inputs.motorAppliedVolts = self._motorAppliedVolts
-        inputs.motorCurrent = abs(self._motorAppliedVolts / 12.0) * 40.0  # Rough current estimate
-        inputs.motorTemperature = 25.0  # Room temperature
-
-        self.inputVoltage = self.motor.get() * RobotController.getBatteryVoltage()
-        self.motor_sim.setInputVoltage(self.inputVoltage)
-
-        self.motor_sim.update(dt)  # 20ms periodic
-        """
+        self.controller.setSetpoint(rotationsToRadians(position))
 
     def setMotorVoltage(self, voltage: volts) -> None:
         """Set the motor output voltage (simulated)."""
