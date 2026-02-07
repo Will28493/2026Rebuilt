@@ -37,6 +37,13 @@ class RoboticsMatch:
             Phase(
                 phase=MatchPhase.TRANSITION,
                 duration=self.TRANSITION_DELAY,
+                get-phase( )
+                Driverstation.getmatchtime
+                winner = driverstation.getgamespecificmessage
+                if time = none or <= 0
+                no data
+                if 0-20
+                auto
                 description="Delay between auto and teleop for scoring purposes.",
             ),
             Phase(
