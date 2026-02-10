@@ -1,22 +1,69 @@
+import wpilib
 from wpilib import DriverStation
+
 def get_phase():
-    # Fetch data from Driverstation
-    # Note: getMatchTime() returns a float (seconds remaining)
+    # 1. Goes to get data from DriverStation
+    # getMatchTime() returns seconds left in the current period
     time = DriverStation.getMatchTime()
 
-    # Check if the match has actually started or if the data is valid
-    if time is None or time < 0:
-        return "PRE_MATCH"
+    # 2. Goes to get game-specific data like "L", "R", "RRR"
+    game_data = DriverStation.getGameSpecificMessage()
 
-    # FRC Match Timing Logic
-    # 15s to 0s during Autonomous
-    if Driverstation
-    phase=MatchPhase.TRANSITION,
-    duration=self.TRANSITION_DELAY,
-           get-phase( ) -> string:
-    time = Driverstation.getmatchtime
-    winner = driverstation.getgamespecificmessage
-             if time = none or <= 0
-             data
-             if 0-20
-             auto
+    # 3. Check if the match has actually started or if the data is valid
+    # In FRC, time is generally None or -1 before the match starts
+    if time is None or time <= 0:
+        return "PRE-MATCH", game_data
+
+# Using match-case for nicer state handling
+# We match against a tuple of (isAutonomous, isTeleop, time)
+match (DriverStation.isAutonomous(), DriverStation.isTeleop(), time):
+
+    case (True, _, _):
+        return "Auto", game_data
+    
+    case (_, True, t) if t <= 20:
+        return "ENDGAME", game_data
+
+    case (_, True, _):
+        return "TELEOP", game_data
+
+    case _:
+        return "DISABLED", game_data
+    
+    # 4. FRC Match Timing reasoning
+    # During Autonomous, the timer begins at 15.0 and counts down to 0.
+    if DriverStation.isAutonomous():
+        return "AUTO", game_data
+
+    # During Teleop, the timer starts at 135.0 and goes until it reaches 0.
+    if DriverStation.isTeleop():
+        # Inspect if we are in the final 20 seconds (Endgame)
+        if time <= 20:
+            return "ENDGAME", game_data
+        else:
+            return "TELEOP", game_data
+
+    # Retreat for Disabled or Test mode
+    return "DISABLED", game_data
+
+class MyRobot(wpilib.TimedRobot):
+    def autonomousPeriodic(self):
+        phase, data = get_phase()
+
+        # You can use match-case to manage the phase results too!
+        match phase:
+            case "AUTO":
+                if "L" in data:
+                    self.drive_to_left_goal()
+                else:
+                    self.drive_to_right_goal()
+
+    def teleopPeriodic(self):
+        phase, data = get_phase()
+
+        match phase:
+            case "ENDGAME":
+                self.operator_controller.setRumble(wpilib.XboxController.RumbleType.kBothRumble, 1.0)
+            case "TELEOP":
+                # Common Teleop driving logic here
+                pass
