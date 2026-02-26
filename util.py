@@ -241,3 +241,40 @@ class LoggedTracer:
         print(f"LoggedTracer/{epochName}MS", (now - cls._startTime) * 1000)
         #Logger.recordOutput(f"LoggedTracer/{epochName}MS", (now - cls._startTime) * 1000)
         cls._startTime = now
+
+# ----------------- Robot state machine -----------------
+
+IDLE = "IDLE"
+MOVE = "MOVE"
+AVOID_OBSTACLE = "AVOID_OBSTACLE"
+
+current_state = IDLE
+
+def update_state(sensor_data: dict) -> str:
+    """
+    Decide the next state based on sensor data.
+    sensor_data example:
+        {
+            "have_target": bool,
+            "obstacle": bool,
+            "target_reached": bool
+        }
+    """
+    global current_state
+
+    if current_state == IDLE:
+        if sensor_data.get("have_target", False):
+            current_state = MOVE
+
+    elif current_state == MOVE:
+        if sensor_data.get("obstacle", False):
+            current_state = AVOID_OBSTACLE
+        elif sensor_data.get("target_reached", False):
+            current_state = IDLE
+
+    elif current_state == AVOID_OBSTACLE:
+        if not sensor_data.get("obstacle", False):
+            current_state = MOVE
+
+    return current_state
+
